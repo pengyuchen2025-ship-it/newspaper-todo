@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今日事报 · 待办清单</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Songti SC", "STSong", "SimSun", serif;
+    background: #e8e2d4;
+    color: #1c1a15;
+    min-height: 100dvh; display: flex; justify-content: center;
+    padding: 48px 20px;
+  }
+  .paper {
+    width: 100%; max-width: 680px;
+    background: #f5f1e6;
+    padding: 40px 44px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.2), 0 16px 40px rgba(60,50,30,.25);
+    border: 1px solid #d8d0bc;
+    height: fit-content;
+  }
+  .masthead { text-align: center; border-bottom: 4px double #1c1a15; padding-bottom: 18px; }
+  .masthead .eyebrow {
+    display: flex; justify-content: space-between;
+    font-size: 11px; letter-spacing: 1px; color: #6d6455;
+    margin-bottom: 10px;
+  }
+  h1 { font-size: 44px; font-weight: 900; letter-spacing: 10px; }
+  .masthead .slogan { font-size: 12px; color: #6d6455; margin-top: 8px; letter-spacing: 4px; }
+  .dateline {
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px;
+    font-size: 12px; padding: 10px 2px;
+    border-bottom: 1.5px solid #1c1a15; margin-bottom: 24px;
+  }
+  .headline { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
+  .standfirst { font-size: 13px; color: #55503f; margin-bottom: 20px; line-height: 1.7; }
+
+  .input-row { display: flex; margin-bottom: 12px; border: 1.5px solid #1c1a15; }
+  .input-row input {
+    flex: 1; min-width: 0; border: none; background: #fffdf5; outline: none;
+    font-family: inherit; font-size: 15px; padding: 12px 14px; color: #1c1a15;
+  }
+  .input-row input::placeholder { color: #a89e88; font-style: italic; }
+  .input-row select {
+    border: none; border-left: 1.5px solid #1c1a15; background: #fffdf5;
+    font-family: inherit; font-size: 13px; padding: 0 10px; color: #55503f;
+    outline: none; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+  }
+  .input-row button {
+    border: none; border-left: 1.5px solid #1c1a15;
+    background: #1c1a15; color: #f5f1e6;
+    font-family: inherit; font-size: 14px; letter-spacing: 3px;
+    padding: 0 22px; cursor: pointer;
+  }
+  .input-row button:hover { background: #3a352a; }
+
+  .filters {
+    display: flex; gap: 0; margin-bottom: 24px;
+    border-bottom: 1px solid #b5ab90; font-size: 13px;
+  }
+  .filters span {
+    padding: 8px 20px; cursor: pointer; color: #6d6455; letter-spacing: 2px;
+    border-bottom: 3px solid transparent; margin-bottom: -1px;
+  }
+  .filters span.active { color: #1c1a15; font-weight: 700; border-bottom-color: #8a2e1f; }
+  .filters span:hover { color: #1c1a15; }
+
+  .columns { column-count: 2; column-gap: 28px; column-rule: 1px solid #cfc6ae; min-height: 120px; }
+  @media (max-width: 560px) {
+    .paper { padding: 28px 22px; }
+    .columns { column-count: 1; }
+    h1 { font-size: 34px; letter-spacing: 6px; }
+  }
+  .item {
+    break-inside: avoid; margin-bottom: 20px;
+    padding-bottom: 16px; border-bottom: 1px dotted #b5ab90;
+  }
+  .item .kicker {
+    font-size: 10px; letter-spacing: 3px; color: #8a2e1f;
+    margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .item .del {
+    cursor: pointer; color: #a89e88; letter-spacing: 0; font-size: 11px;
+    background: none; border: none; font-family: inherit;
+  }
+  .item .del:hover { color: #8a2e1f; text-decoration: underline; }
+  .item .title {
+    font-size: 16px; font-weight: 700; line-height: 1.5;
+    cursor: pointer;
+  }
+  .item .title:hover { text-decoration: underline dotted #8a2e1f 1.5px; text-underline-offset: 4px; }
+  .item .title[contenteditable="true"] {
+    outline: 1.5px dashed #8a2e1f; outline-offset: 3px;
+    text-decoration: none; cursor: text; background: #fffdf5;
+  }
+  .item.done .title { text-decoration: line-through; color: #9a9078; }
+  .item.done .title:hover { text-decoration: line-through; }
+  .item .meta { font-size: 11px; color: #6d6455; margin-top: 6px; font-style: italic; }
+  .item .done-mark {
+    display: inline-block; font-size: 11px; font-weight: bold;
+    color: #8a2e1f; border: 1.5px solid #8a2e1f;
+    padding: 1px 8px; margin-top: 7px; transform: rotate(-4deg);
+    letter-spacing: 2px;
+  }
+  .empty {
+    column-span: all; text-align: center; padding: 36px 0 44px;
+    color: #a89e88; font-style: italic; font-size: 14px; line-height: 2;
+  }
+  .empty b { font-size: 18px; display: block; font-style: normal; color: #6d6455; letter-spacing: 4px; }
+
+  .footer {
+    margin-top: 8px; padding-top: 14px; border-top: 4px double #1c1a15;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+    font-size: 11px; color: #6d6455; letter-spacing: 1px;
+  }
+  .footer .clear { cursor: pointer; text-decoration: underline; }
+  .footer .clear:hover { color: #8a2e1f; }
+
+  .toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #1c1a15; color: #f5f1e6; font-size: 13px; letter-spacing: 2px;
+    padding: 10px 26px; opacity: 0; transition: transform .25s ease, opacity .25s ease;
+    pointer-events: none; font-family: inherit;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+<div class="paper">
+  <div class="masthead">
+    <div class="eyebrow"><span id="issue">第 — 期</span><span>今日事 · 今日毕</span><span>免费发行</span></div>
+    <h1>今日事报</h1>
+    <div class="slogan">—— 所载各事 · 办讫为凭 ——</div>
+  </div>
+  <div class="dateline">
+    <span id="date-cn">载入中…</span>
+    <span id="headline-brief"></span>
+  </div>
+
+  <div class="headline">本日待办要闻</div>
+  <p class="standfirst" id="standfirst"></p>
+
+  <form class="input-row" id="add-form">
+    <input type="text" id="new-task" placeholder="向本报投稿新任务……" maxlength="60" autocomplete="off">
+    <select id="new-cat">
+      <option value="工作">工作</option>
+      <option value="会议">会议</option>
+      <option value="健康">健康</option>
+      <option value="日常">日常</option>
+      <option value="阅读">阅读</option>
+      <option value="其他">其他</option>
+    </select>
+    <button type="submit">刊登</button>
+  </form>
+
+  <div class="filters" id="filters">
+    <span data-f="all" class="active">全部</span>
+    <span data-f="todo">未办</span>
+    <span data-f="done">已办</span>
+  </div>
+
+  <div class="columns" id="list"></div>
+
+  <div class="footer">
+    <span>主编：陈鹏宇</span>
+    <span id="stats"></span>
+    <span class="clear" id="clear-done">清理已办稿件</span>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var KEY = 'newspaper-todo-v1';
+  var SECTIONS = { '工作': '头版', '会议': '要闻', '健康': '体育版', '日常': '通讯', '阅读': '副刊', '其他': '街谈' };
+  var tasks = load();
+  var filter = 'all';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var list = $('list');
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function save() { localStorage.setItem(KEY, JSON.stringify(tasks)); }
+
+  function cnNum(n) {
+    var d = '〇一二三四五六七八九';
+    if (n <= 10) return n === 10 ? '十' : d[n];
+    if (n < 20) return '十' + (n % 10 ? d[n % 10] : '');
+    if (n < 100) return d[Math.floor(n / 10)] + '十' + (n % 10 ? d[n % 10] : '');
+    return String(n).split('').map(function (c) { return d[+c]; }).join('');
+  }
+  function cnDate(dt) {
+    var y = String(dt.getFullYear()).split('').map(function (c) { return '〇一二三四五六七八九'[+c]; }).join('');
+    var w = '日一二三四五六'[dt.getDay()];
+    return y + '年' + cnNum(dt.getMonth() + 1) + '月' + cnNum(dt.getDate()) + '日 星期' + w;
+  }
+
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function fmtTime(ts) {
+    var d = new Date(ts);
+    var h = d.getHours(), m = d.getMinutes();
+    return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+  }
+
+  function render() {
+    var shown = tasks.filter(function (t) {
+      return filter === 'all' || (filter === 'done' ? t.done : !t.done);
+    });
+
+    if (!shown.length) {
+      var msgs = {
+        all: '<b>本日暂无稿件</b>版面虚位以待，请在上方投稿栏刊登第一条任务',
+        todo: '<b>未办事项已清零</b>诸事办讫，本报向您致以敬意',
+        done: '<b>尚无已办稿件</b>完成一件，此处便刊登一件'
+      };
+      list.innerHTML = '<div class="empty">' + msgs[filter] + '</div>';
+    } else {
+      list.innerHTML = shown.map(function (t) {
+        var sec = SECTIONS[t.cat] || '街谈';
+        return '<div class="item' + (t.done ? ' done' : '') + '" data-id="' + t.id + '">' +
+          '<div class="kicker"><span>' + sec + ' · ' + esc(t.cat) + '</span>' +
+          '<button class="del" title="删除此条">撤稿</button></div>' +
+          '<div class="title" title="单击划记完成 · 双击修改">' + esc(t.text) + '</div>' +
+          (t.done
+            ? '<span class="done-mark">已 办</span>'
+            : '<div class="meta">投稿于 ' + fmtTime(t.created) + '</div>') +
+          '</div>';
+      }).join('');
+    }
+
+    var total = tasks.length, done = tasks.filter(function (t) { return t.done; }).length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+    $('stats').textContent = '完成率 ' + pct + '% · 共 ' + total + ' 条';
+    $('headline-brief').textContent = total === 0 ? '本日头条：静候投稿'
+      : done === total ? '号外：诸事已毕！'
+      : '本日头条：尚有' + cnNum(total - done) + '事未办';
+    $('standfirst').textContent = total === 0
+      ? '据本报记者报道，编辑部今日暂未收到任何稿件。市民如有待办事宜，欢迎随时来函刊登。'
+      : done === total
+      ? '据本报记者报道，今日全部 ' + total + ' 项事务均已办结。相关人士表示："今晚可以睡个好觉了。"'
+      : '据本报记者报道，今日共有 ' + total + ' 项事务待办，其中 ' + done + ' 项已顺利完成。相关人士表示："剩下的这就去办。"';
+  }
+
+  $('add-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = $('new-task');
+    var text = input.value.trim();
+    if (!text) { input.focus(); return; }
+    tasks.unshift({ id: Date.now(), text: text, cat: $('new-cat').value, done: false, created: Date.now() });
+    input.value = '';
+    input.focus();
+    save(); render();
+    toast('已刊登');
+  });
+
+  $('filters').addEventListener('click', function (e) {
+    var s = e.target.closest('span[data-f]');
+    if (!s) return;
+    filter = s.dataset.f;
+    this.querySelectorAll('span').forEach(function (el) { el.classList.remove('active'); });
+    s.classList.add('active');
+    render();
+  });
+
+  list.addEventListener('click', function (e) {
+    var item = e.target.closest('.item');
+    if (!item) return;
+    var id = +item.dataset.id;
+    var task = tasks.find(function (t) { return t.id === id; });
+    if (!task) return;
+
+    if (e.target.classList.contains('del')) {
+      if (!confirm('确定撤下这条稿件？\n「' + task.text + '」')) return;
+      tasks = tasks.filter(function (t) { return t.id !== id; });
+      save(); render();
+      toast('已撤稿');
+      return;
+    }
+    if (e.target.classList.contains('title')) {
+      if (e.target.isContentEditable) return;
+      task.done = !task.done;
+      save(); render();
+      toast(task.done ? '办讫，盖章存档' : '重新列为待办');
+    }
+  });
+
+  list.addEventListener('dblclick', function (e) {
+    var title = e.target.closest('.title');
+    if (!title || title.isContentEditable) return;
+    var item = title.closest('.item');
+    var id = +item.dataset.id;
+    var task = tasks.find(function (t) { return t.id === id; });
+    if (!task) return;
+
+    title.contentEditable = 'true';
+    title.focus();
+    document.getSelection().selectAllChildren(title);
+
+    function finish(commit) {
+      title.contentEditable = 'false';
+      var text = title.textContent.trim();
+      if (commit && text) { task.text = text; save(); toast('已改稿'); }
+      render();
+    }
+    title.addEventListener('blur', function () { finish(true); }, { once: true });
+    title.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); title.blur(); }
+      if (ev.key === 'Escape') { title.textContent = task.text; title.blur(); }
+    });
+  });
+
+  $('clear-done').addEventListener('click', function () {
+    var n = tasks.filter(function (t) { return t.done; }).length;
+    if (!n) { toast('没有可清理的已办稿件'); return; }
+    if (!confirm('将 ' + n + ' 条已办稿件送入档案室（删除）？')) return;
+    tasks = tasks.filter(function (t) { return !t.done; });
+    save(); render();
+    toast('已清理 ' + n + ' 条');
+  });
+
+  var now = new Date();
+  $('date-cn').textContent = cnDate(now);
+  $('issue').textContent = '第 ' + (Math.floor((now - new Date(now.getFullYear(), 0, 1)) / 864e5) + 1) + ' 期';
+
+  render();
+})();
+</script>
+</body>
+</html>
