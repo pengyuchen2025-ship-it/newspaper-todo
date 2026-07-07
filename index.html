@@ -134,6 +134,14 @@
     padding: 1px 8px; margin-top: 7px; transform: rotate(-4deg);
     letter-spacing: 2px;
   }
+  .urge-mark { transform: rotate(3deg); }
+  .item.overdue .kicker { font-weight: 700; }
+  .item.overdue .meta { color: #8a2e1f; }
+  .item.prio-top { column-span: all; }
+  .item.prio-top .title { font-size: 21px; line-height: 1.45; }
+  .item.prio-brief { margin-bottom: 12px; padding-bottom: 10px; }
+  .item.prio-brief .title { font-size: 13px; }
+  .item.prio-brief .kicker { font-size: 9px; margin-bottom: 3px; }
   .empty {
     column-span: all; text-align: center; padding: 30px 0 38px;
     color: #a89e88; font-style: italic; font-size: 14px; line-height: 2;
@@ -275,6 +283,11 @@
       <p class="standfirst" id="tasks-standfirst"></p>
       <form class="input-row" id="add-form">
         <input type="text" id="new-task" placeholder="向本报投稿新任务……" maxlength="60" autocomplete="off">
+        <select id="new-prio" title="版位：头条最要紧，简讯是小事">
+          <option value="normal">要闻</option>
+          <option value="top">头条</option>
+          <option value="brief">简讯</option>
+        </select>
         <select id="new-cat">
           <option value="工作">工作</option>
           <option value="会议">会议</option>
@@ -427,10 +440,29 @@
   /* ── 渲染 ── */
   function show(id, on) { $(id).style.display = on ? '' : 'none'; }
 
+  var PRIO_ORDER = { top: 0, normal: 1, brief: 2 };
+  var PRIO_NAME = { top: '头条', brief: '简讯' };
+  function prioOf(t) { return PRIO_ORDER[t.prio] !== undefined ? t.prio : 'normal'; }
+  function overdueDays(t) {
+    if (t.done) return 0;
+    var now = new Date(), c = new Date(t.created);
+    var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var created0 = new Date(c.getFullYear(), c.getMonth(), c.getDate());
+    return Math.round((today0 - created0) / 864e5);
+  }
+
   function renderTasks() {
     var list = $('list');
     var shown = tasks.filter(function (t) {
       return filter === 'all' || (filter === 'done' ? t.done : !t.done);
+    });
+    shown.sort(function (a, b) {
+      var oa = overdueDays(a) > 0 ? 0 : 1, ob = overdueDays(b) > 0 ? 0 : 1;
+      if (oa !== ob) return oa - ob;
+      var pa = PRIO_ORDER[prioOf(a)], pb = PRIO_ORDER[prioOf(b)];
+      if (pa !== pb) return pa - pb;
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return b.created - a.created;
     });
     if (!shown.length) {
       var msgs = {
@@ -441,21 +473,33 @@
       list.innerHTML = '<div class="empty">' + msgs[filter] + '</div>';
     } else {
       list.innerHTML = shown.map(function (t) {
-        return '<div class="item' + (t.done ? ' done' : '') + '" data-id="' + t.id + '">' +
-          '<div class="kicker"><span>' + (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat) + '</span>' +
+        var od = overdueDays(t);
+        var prio = prioOf(t);
+        var cls = 'item' + (t.done ? ' done' : '') + (od > 0 ? ' overdue' : '') +
+          (prio !== 'normal' ? ' prio-' + prio : '');
+        var kicker = od > 0 ? '催办 · ' + esc(t.cat)
+          : PRIO_NAME[prio] ? PRIO_NAME[prio] + ' · ' + esc(t.cat)
+          : (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat);
+        var tail;
+        if (t.done) tail = '<span class="done-mark">已 办</span>';
+        else if (od > 0) tail = '<span class="done-mark urge-mark">催 办</span>' +
+          '<div class="meta">已悬' + cnNum(od) + '日 · 编辑部催办</div>';
+        else tail = '<div class="meta">投稿于 ' + fmtTime(t.created) + '</div>';
+        return '<div class="' + cls + '" data-id="' + t.id + '">' +
+          '<div class="kicker"><span>' + kicker + '</span>' +
           '<button class="del" title="删除此条">撤稿</button></div>' +
           '<div class="title" title="单击划记完成 · 双击修改">' + esc(t.text) + '</div>' +
-          (t.done ? '<span class="done-mark">已 办</span>'
-                  : '<div class="meta">投稿于 ' + fmtTime(t.created) + '</div>') +
-          '</div>';
+          tail + '</div>';
       }).join('');
     }
     var total = tasks.length, done = tasks.filter(function (t) { return t.done; }).length;
-    $('tasks-standfirst').textContent = total === 0
+    var urgent = tasks.filter(function (t) { return overdueDays(t) > 0; }).length;
+    $('tasks-standfirst').textContent = (total === 0
       ? '据本报记者报道，编辑部今日暂未收到任何稿件。市民如有待办事宜，欢迎随时来函刊登。'
       : done === total
       ? '据本报记者报道，今日全部 ' + total + ' 项事务均已办结。相关人士表示："今晚可以睡个好觉了。"'
-      : '据本报记者报道，今日共有 ' + total + ' 项事务待办，其中 ' + done + ' 项已顺利完成。相关人士表示："剩下的这就去办。"';
+      : '据本报记者报道，今日共有 ' + total + ' 项事务待办，其中 ' + done + ' 项已顺利完成。相关人士表示："剩下的这就去办。"')
+      + (urgent ? '另有 ' + urgent + ' 件隔夜悬案，编辑部已发出催办函。' : '');
   }
 
   function renderArchive(range, label) {
@@ -519,7 +563,9 @@
         renderTasks();
         doneCount = tasks.filter(function (t) { return t.done; }).length;
         var total = tasks.length;
-        $('headline-brief').textContent = total === 0 ? '本日头条：静候投稿'
+        var urgent = tasks.filter(function (t) { return overdueDays(t) > 0; }).length;
+        $('headline-brief').textContent = urgent ? '本日头条：' + cnNum(urgent) + '件催办中'
+          : total === 0 ? '本日头条：静候投稿'
           : doneCount === total ? '号外：诸事已毕！'
           : '本日头条：尚有' + cnNum(total - doneCount) + '事未办';
       } else {
@@ -593,7 +639,7 @@
     var input = $('new-task');
     var text = input.value.trim();
     if (!text) { input.focus(); return; }
-    tasks.unshift({ id: Date.now(), text: text, cat: $('new-cat').value, done: false, created: Date.now() });
+    tasks.unshift({ id: Date.now(), text: text, cat: $('new-cat').value, prio: $('new-prio').value, done: false, created: Date.now() });
     input.value = '';
     input.focus();
     save(TASK_KEY, tasks); render();
