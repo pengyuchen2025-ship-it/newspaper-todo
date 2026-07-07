@@ -184,6 +184,44 @@
   }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
+  /* ── 送报开场：打字机动画 ── */
+  #press-overlay {
+    position: fixed; inset: 0; background: #e8e2d4; z-index: 100;
+    display: none; align-items: center; justify-content: center;
+  }
+  body.intro-typing #press-overlay { display: flex; }
+  body.intro-typing .paper-wrap, body.intro-typing .toolbar { visibility: hidden; }
+  #type-line { font-size: 42px; font-weight: 900; letter-spacing: 14px; color: #1c1a15; }
+  #type-line .caret {
+    display: inline-block; width: .55em; height: 1.05em; background: #1c1a15;
+    vertical-align: -0.12em; margin-left: 2px;
+    animation: caret-blink .7s steps(1) infinite;
+  }
+  @keyframes caret-blink { 50% { opacity: 0; } }
+
+  .paper-wrap { position: relative; width: 100%; max-width: 680px; }
+  body.intro-printing .toolbar { visibility: hidden; }
+  body.intro-printing .paper {
+    animation: printout 3s steps(32, end) forwards;
+  }
+  @keyframes printout {
+    from { clip-path: inset(0 0 100% 0); }
+    to   { clip-path: inset(0 0 0 0); }
+  }
+  #print-head {
+    display: none; position: absolute; left: -14px; right: -14px; height: 5px;
+    background: #1c1a15; box-shadow: 0 3px 8px rgba(0,0,0,.35);
+    pointer-events: none;
+  }
+  body.intro-printing #print-head { display: block; animation: head-down 3s steps(32, end) forwards; }
+  @keyframes head-down { from { top: 0; } to { top: 100%; } }
+  body.intro-printing .paper-wrap { animation: jitter .14s steps(2) infinite; }
+  @keyframes jitter {
+    0% { transform: translateX(0); }
+    50% { transform: translateX(-1.5px); }
+    100% { transform: translateX(1px); }
+  }
+
   /* ── 印刷模式：隐藏交互件，显示纯排版 ── */
   body.printing .toolbar, body.printing .input-row, body.printing .filters,
   body.printing .item .del, body.printing .footer .clear,
@@ -218,6 +256,7 @@
   </button>
 </div>
 
+<div class="paper-wrap">
 <div class="paper" id="paper">
   <div class="masthead">
     <div class="eyebrow"><span id="issue">第 — 期</span><span>今日事 · 今日毕</span><span>免费发行</span></div>
@@ -286,6 +325,11 @@
     <span class="clear" id="clear-done">清理已办稿件</span>
   </div>
 </div>
+
+<div id="print-head"></div>
+</div>
+
+<div id="press-overlay"><div id="type-line"></div></div>
 
 <div class="toast" id="toast"></div>
 
@@ -686,6 +730,44 @@
   });
 
   render();
+
+  /* ── 送报开场：报头逐字敲出 → 整版逐行打印 ── */
+  (function intro() {
+    var LAST = 'newspaper-lastprint';
+    var today = dayKey(new Date());
+    var byUrl = new URLSearchParams(location.search).get('press') === '1';
+    if (!byUrl && localStorage.getItem(LAST) === today) return;
+    localStorage.setItem(LAST, today);
+
+    var body = document.body;
+    var line = $('type-line');
+    var title = '今日事报';
+    var timers = [];
+    body.classList.add('intro-typing');
+
+    function done(e) {
+      if (e) { e.stopPropagation(); e.preventDefault(); }
+      timers.forEach(clearTimeout);
+      body.classList.remove('intro-typing');
+      body.classList.remove('intro-printing');
+      document.removeEventListener('click', done, true);
+      document.removeEventListener('keydown', done, true);
+    }
+    document.addEventListener('click', done, true);
+    document.addEventListener('keydown', done, true);
+
+    var i = 0;
+    (function typeNext() {
+      line.innerHTML = esc(title.slice(0, i)) + '<span class="caret"></span>';
+      if (i++ < title.length) timers.push(setTimeout(typeNext, 280));
+      else timers.push(setTimeout(startPrint, 700));
+    })();
+    function startPrint() {
+      body.classList.remove('intro-typing');
+      body.classList.add('intro-printing');
+      timers.push(setTimeout(done, 3150));
+    }
+  })();
 })();
 </script>
 </body>
