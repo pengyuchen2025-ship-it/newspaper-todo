@@ -3,16 +3,48 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>今日事报 · 待办清单</title>
+<title>今日事报 · 待办与复盘</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: "Songti SC", "STSong", "SimSun", serif;
     background: #e8e2d4;
     color: #1c1a15;
-    min-height: 100dvh; display: flex; justify-content: center;
-    padding: 48px 20px;
+    min-height: 100dvh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 28px 20px 48px;
   }
+
+  /* ── 工具栏（不进入打印） ── */
+  .toolbar {
+    width: 100%; max-width: 680px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 10px;
+    margin-bottom: 16px; font-size: 13px;
+  }
+  .tabs { display: flex; border: 1.5px solid #1c1a15; background: #f5f1e6; }
+  .tabs span {
+    padding: 7px 20px; cursor: pointer; letter-spacing: 3px; color: #6d6455;
+    border-right: 1.5px solid #1c1a15;
+  }
+  .tabs span:last-child { border-right: none; }
+  .tabs span.active { background: #1c1a15; color: #f5f1e6; }
+  .nav { display: flex; gap: 8px; align-items: center; }
+  .nav button, #print-btn {
+    font-family: inherit; font-size: 12px; letter-spacing: 1px;
+    background: #f5f1e6; border: 1.5px solid #1c1a15; color: #1c1a15;
+    padding: 7px 14px; cursor: pointer;
+  }
+  .nav button:hover { background: #1c1a15; color: #f5f1e6; }
+  #print-btn {
+    background: #8a2e1f; border-color: #8a2e1f; color: #f5f1e6;
+    letter-spacing: 3px; display: flex; align-items: center; gap: 8px;
+  }
+  #print-btn:hover { background: #6d2317; }
+  #print-btn svg { display: block; }
+  #print-btn:disabled { opacity: .6; cursor: wait; }
+
+  /* ── 报纸本体 ── */
   .paper {
     width: 100%; max-width: 680px;
     background: #f5f1e6;
@@ -37,6 +69,11 @@
   .headline { font-size: 22px; font-weight: 900; margin-bottom: 6px; }
   .standfirst { font-size: 13px; color: #55503f; margin-bottom: 20px; line-height: 1.7; }
 
+  #sections { display: flex; flex-direction: column; }
+  .section { margin-bottom: 8px; }
+  .section + .section { border-top: 1.5px solid #1c1a15; padding-top: 20px; margin-top: 16px; }
+
+  /* ── 待办 ── */
   .input-row { display: flex; margin-bottom: 12px; border: 1.5px solid #1c1a15; }
   .input-row input {
     flex: 1; min-width: 0; border: none; background: #fffdf5; outline: none;
@@ -56,9 +93,8 @@
     padding: 0 22px; cursor: pointer;
   }
   .input-row button:hover { background: #3a352a; }
-
   .filters {
-    display: flex; gap: 0; margin-bottom: 24px;
+    display: flex; margin-bottom: 24px;
     border-bottom: 1px solid #b5ab90; font-size: 13px;
   }
   .filters span {
@@ -68,12 +104,7 @@
   .filters span.active { color: #1c1a15; font-weight: 700; border-bottom-color: #8a2e1f; }
   .filters span:hover { color: #1c1a15; }
 
-  .columns { column-count: 2; column-gap: 28px; column-rule: 1px solid #cfc6ae; min-height: 120px; }
-  @media (max-width: 560px) {
-    .paper { padding: 28px 22px; }
-    .columns { column-count: 1; }
-    h1 { font-size: 34px; letter-spacing: 6px; }
-  }
+  .columns { column-count: 2; column-gap: 28px; column-rule: 1px solid #cfc6ae; }
   .item {
     break-inside: avoid; margin-bottom: 20px;
     padding-bottom: 16px; border-bottom: 1px dotted #b5ab90;
@@ -87,17 +118,15 @@
     background: none; border: none; font-family: inherit;
   }
   .item .del:hover { color: #8a2e1f; text-decoration: underline; }
-  .item .title {
-    font-size: 16px; font-weight: 700; line-height: 1.5;
-    cursor: pointer;
-  }
-  .item .title:hover { text-decoration: underline dotted #8a2e1f 1.5px; text-underline-offset: 4px; }
+  .item .title { font-size: 16px; font-weight: 700; line-height: 1.5; }
+  #list .item .title { cursor: pointer; }
+  #list .item .title:hover { text-decoration: underline dotted #8a2e1f 1.5px; text-underline-offset: 4px; }
   .item .title[contenteditable="true"] {
     outline: 1.5px dashed #8a2e1f; outline-offset: 3px;
-    text-decoration: none; cursor: text; background: #fffdf5;
+    text-decoration: none !important; cursor: text; background: #fffdf5;
   }
   .item.done .title { text-decoration: line-through; color: #9a9078; }
-  .item.done .title:hover { text-decoration: line-through; }
+  #list .item.done .title:hover { text-decoration: line-through; }
   .item .meta { font-size: 11px; color: #6d6455; margin-top: 6px; font-style: italic; }
   .item .done-mark {
     display: inline-block; font-size: 11px; font-weight: bold;
@@ -106,10 +135,38 @@
     letter-spacing: 2px;
   }
   .empty {
-    column-span: all; text-align: center; padding: 36px 0 44px;
+    column-span: all; text-align: center; padding: 30px 0 38px;
     color: #a89e88; font-style: italic; font-size: 14px; line-height: 2;
   }
   .empty b { font-size: 18px; display: block; font-style: normal; color: #6d6455; letter-spacing: 4px; }
+
+  /* ── 社论（复盘） ── */
+  .byline {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; color: #6d6455; margin-bottom: 14px; font-style: italic;
+  }
+  .review-input {
+    width: 100%; border: none; outline: none; resize: none;
+    font-family: "Kaiti SC", "STKaiti", "KaiTi", inherit;
+    font-size: 16px; line-height: 32px; color: #2a251c;
+    background: repeating-linear-gradient(0deg, transparent, transparent 31px, #ddd3ba 31px, #ddd3ba 32px);
+    min-height: 128px; padding: 0 2px;
+  }
+  .review-input::placeholder { color: #b5a98d; }
+  .article-render {
+    display: none;
+    font-family: "Kaiti SC", "STKaiti", "KaiTi", inherit;
+    font-size: 16px; line-height: 2; color: #2a251c;
+    white-space: pre-wrap;
+  }
+
+  /* ── 存档摘录 ── */
+  .digest-item { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px dotted #b5ab90; }
+  .digest-item .d-date { font-size: 11px; letter-spacing: 2px; color: #8a2e1f; margin-bottom: 4px; }
+  .digest-item .d-text {
+    font-family: "Kaiti SC", "STKaiti", "KaiTi", inherit;
+    font-size: 14px; line-height: 1.9; color: #3d372b; white-space: pre-wrap;
+  }
 
   .footer {
     margin-top: 8px; padding-top: 14px; border-top: 4px double #1c1a15;
@@ -123,46 +180,105 @@
     position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px);
     background: #1c1a15; color: #f5f1e6; font-size: 13px; letter-spacing: 2px;
     padding: 10px 26px; opacity: 0; transition: transform .25s ease, opacity .25s ease;
-    pointer-events: none; font-family: inherit;
+    pointer-events: none; z-index: 10;
   }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* ── 印刷模式：隐藏交互件，显示纯排版 ── */
+  body.printing .toolbar, body.printing .input-row, body.printing .filters,
+  body.printing .item .del, body.printing .footer .clear,
+  body.printing .review-input, body.printing .empty-hint { display: none !important; }
+  body.printing .article-render { display: block; }
+  body.printing .paper { box-shadow: none; }
+  body.printing .section.print-hide { display: none; }
+
+  @media (max-width: 560px) {
+    .paper { padding: 28px 22px; }
+    .columns { column-count: 1; }
+    h1 { font-size: 34px; letter-spacing: 6px; }
+  }
 </style>
 </head>
 <body>
-<div class="paper">
+
+<div class="toolbar">
+  <div class="tabs" id="tabs">
+    <span data-e="day" class="active">日 刊</span>
+    <span data-e="week">周 刊</span>
+    <span data-e="month">月 刊</span>
+  </div>
+  <div class="nav">
+    <button id="nav-prev">‹ 前一期</button>
+    <button id="nav-now">本 期</button>
+    <button id="nav-next">后一期 ›</button>
+  </div>
+  <button id="print-btn">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+    印刷发行
+  </button>
+</div>
+
+<div class="paper" id="paper">
   <div class="masthead">
     <div class="eyebrow"><span id="issue">第 — 期</span><span>今日事 · 今日毕</span><span>免费发行</span></div>
     <h1>今日事报</h1>
     <div class="slogan">—— 所载各事 · 办讫为凭 ——</div>
   </div>
   <div class="dateline">
-    <span id="date-cn">载入中…</span>
+    <span id="date-cn"></span>
     <span id="headline-brief"></span>
   </div>
 
-  <div class="headline">本日待办要闻</div>
-  <p class="standfirst" id="standfirst"></p>
+  <div id="sections">
+    <!-- 待办（仅今日的日刊） -->
+    <div class="section" id="tasks-section">
+      <div class="headline">本日待办要闻</div>
+      <p class="standfirst" id="tasks-standfirst"></p>
+      <form class="input-row" id="add-form">
+        <input type="text" id="new-task" placeholder="向本报投稿新任务……" maxlength="60" autocomplete="off">
+        <select id="new-cat">
+          <option value="工作">工作</option>
+          <option value="会议">会议</option>
+          <option value="健康">健康</option>
+          <option value="日常">日常</option>
+          <option value="阅读">阅读</option>
+          <option value="其他">其他</option>
+        </select>
+        <button type="submit">刊登</button>
+      </form>
+      <div class="filters" id="filters">
+        <span data-f="all" class="active">全部</span>
+        <span data-f="todo">未办</span>
+        <span data-f="done">已办</span>
+      </div>
+      <div class="columns" id="list"></div>
+    </div>
 
-  <form class="input-row" id="add-form">
-    <input type="text" id="new-task" placeholder="向本报投稿新任务……" maxlength="60" autocomplete="off">
-    <select id="new-cat">
-      <option value="工作">工作</option>
-      <option value="会议">会议</option>
-      <option value="健康">健康</option>
-      <option value="日常">日常</option>
-      <option value="阅读">阅读</option>
-      <option value="其他">其他</option>
-    </select>
-    <button type="submit">刊登</button>
-  </form>
+    <!-- 办讫纪事（往期日刊 / 周刊 / 月刊） -->
+    <div class="section" id="archive-section">
+      <div class="headline" id="archive-title">办讫纪事</div>
+      <p class="standfirst" id="archive-standfirst"></p>
+      <div class="columns" id="archive-list"></div>
+    </div>
 
-  <div class="filters" id="filters">
-    <span data-f="all" class="active">全部</span>
-    <span data-f="todo">未办</span>
-    <span data-f="done">已办</span>
+    <!-- 社论（复盘） -->
+    <div class="section" id="review-section">
+      <div class="headline" id="review-title">今日社论</div>
+      <div class="byline">
+        <span>主笔 · 陈鹏宇</span>
+        <span class="empty-hint">手稿自动存档</span>
+      </div>
+      <textarea class="review-input" id="review-input" placeholder="在此撰写复盘：今天做成了什么？卡在了哪里？明天最要紧的一件事是什么……"></textarea>
+      <div class="article-render" id="review-render"></div>
+    </div>
+
+    <!-- 社论存档（周刊/月刊） -->
+    <div class="section" id="digest-section">
+      <div class="headline" id="digest-title">每日社论存档</div>
+      <p class="standfirst" id="digest-standfirst"></p>
+      <div id="digest-list"></div>
+    </div>
   </div>
-
-  <div class="columns" id="list"></div>
 
   <div class="footer">
     <span>主编：陈鹏宇</span>
@@ -173,33 +289,78 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="html2canvas.min.js"></script>
 <script>
 (function () {
-  var KEY = 'newspaper-todo-v1';
+  var TASK_KEY = 'newspaper-todo-v1';
+  var REVIEW_KEY = 'newspaper-reviews-v1';
+  var LOG_KEY = 'newspaper-donelog-v1';
   var SECTIONS = { '工作': '头版', '会议': '要闻', '健康': '体育版', '日常': '通讯', '阅读': '副刊', '其他': '街谈' };
-  var tasks = load();
+
+  var tasks = load(TASK_KEY, []);
+  var reviews = load(REVIEW_KEY, {});
+  var doneLog = load(LOG_KEY, []);
   var filter = 'all';
+  var edition = 'day';            // day | week | month
+  var viewDate = new Date();      // 当前浏览的期号所在日期
+
+  // 旧数据迁移：已完成但没有纪事记录的任务，补录一条
+  tasks.forEach(function (t) {
+    if (t.done && !doneLog.some(function (l) { return l.id === t.id; })) {
+      doneLog.push({ id: t.id, text: t.text, cat: t.cat, at: t.created });
+    }
+  });
+  save(LOG_KEY, doneLog);
 
   var $ = function (id) { return document.getElementById(id); };
-  var list = $('list');
 
-  function load() {
-    try { return JSON.parse(localStorage.getItem(KEY)) || []; }
-    catch (e) { return []; }
+  function load(k, fb) {
+    try { return JSON.parse(localStorage.getItem(k)) || fb; } catch (e) { return fb; }
   }
-  function save() { localStorage.setItem(KEY, JSON.stringify(tasks)); }
+  function save(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
 
+  /* ── 日期工具 ── */
+  var CN = '〇一二三四五六七八九';
+  function p2(n) { return n < 10 ? '0' + n : '' + n; }
   function cnNum(n) {
-    var d = '〇一二三四五六七八九';
-    if (n <= 10) return n === 10 ? '十' : d[n];
-    if (n < 20) return '十' + (n % 10 ? d[n % 10] : '');
-    if (n < 100) return d[Math.floor(n / 10)] + '十' + (n % 10 ? d[n % 10] : '');
-    return String(n).split('').map(function (c) { return d[+c]; }).join('');
+    if (n <= 10) return n === 10 ? '十' : CN[n];
+    if (n < 20) return '十' + (n % 10 ? CN[n % 10] : '');
+    if (n < 100) return CN[Math.floor(n / 10)] + '十' + (n % 10 ? CN[n % 10] : '');
+    return String(n).split('').map(function (c) { return CN[+c]; }).join('');
   }
-  function cnDate(dt) {
-    var y = String(dt.getFullYear()).split('').map(function (c) { return '〇一二三四五六七八九'[+c]; }).join('');
-    var w = '日一二三四五六'[dt.getDay()];
-    return y + '年' + cnNum(dt.getMonth() + 1) + '月' + cnNum(dt.getDate()) + '日 星期' + w;
+  function cnYear(d) {
+    return String(d.getFullYear()).split('').map(function (c) { return CN[+c]; }).join('') + '年';
+  }
+  function cnDate(d) {
+    return cnYear(d) + cnNum(d.getMonth() + 1) + '月' + cnNum(d.getDate()) + '日 星期' + '日一二三四五六'[d.getDay()];
+  }
+  function cnMD(d) { return cnNum(d.getMonth() + 1) + '月' + cnNum(d.getDate()) + '日'; }
+  function dayKey(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+  function sameDay(a, b) { return dayKey(a) === dayKey(b); }
+  function isoWeek(d) {
+    var t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    t.setDate(t.getDate() - (t.getDay() + 6) % 7 + 3);
+    var ft = new Date(t.getFullYear(), 0, 4);
+    ft.setDate(ft.getDate() - (ft.getDay() + 6) % 7 + 3);
+    return { y: t.getFullYear(), w: 1 + Math.round((t - ft) / (7 * 864e5)) };
+  }
+  function weekRange(d) {
+    var s = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    s.setDate(s.getDate() - (s.getDay() + 6) % 7);
+    var e = new Date(s); e.setDate(s.getDate() + 6);
+    return { start: s, end: e };
+  }
+  function monthRange(d) {
+    return { start: new Date(d.getFullYear(), d.getMonth(), 1), end: new Date(d.getFullYear(), d.getMonth() + 1, 0) };
+  }
+  function inRange(ts, r) {
+    var end = new Date(r.end); end.setHours(23, 59, 59, 999);
+    return ts >= r.start.getTime() && ts <= end.getTime();
+  }
+  function reviewKey() {
+    if (edition === 'day') return 'd:' + dayKey(viewDate);
+    if (edition === 'week') { var w = isoWeek(viewDate); return 'w:' + w.y + '-W' + p2(w.w); }
+    return 'm:' + viewDate.getFullYear() + '-' + p2(viewDate.getMonth() + 1);
   }
 
   function toast(msg) {
@@ -209,24 +370,24 @@
     clearTimeout(t._timer);
     t._timer = setTimeout(function () { t.classList.remove('show'); }, 2200);
   }
-
   function esc(s) {
     var d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
   }
-
   function fmtTime(ts) {
     var d = new Date(ts);
-    var h = d.getHours(), m = d.getMinutes();
-    return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+    return p2(d.getHours()) + ':' + p2(d.getMinutes());
   }
 
-  function render() {
+  /* ── 渲染 ── */
+  function show(id, on) { $(id).style.display = on ? '' : 'none'; }
+
+  function renderTasks() {
+    var list = $('list');
     var shown = tasks.filter(function (t) {
       return filter === 'all' || (filter === 'done' ? t.done : !t.done);
     });
-
     if (!shown.length) {
       var msgs = {
         all: '<b>本日暂无稿件</b>版面虚位以待，请在上方投稿栏刊登第一条任务',
@@ -236,31 +397,153 @@
       list.innerHTML = '<div class="empty">' + msgs[filter] + '</div>';
     } else {
       list.innerHTML = shown.map(function (t) {
-        var sec = SECTIONS[t.cat] || '街谈';
         return '<div class="item' + (t.done ? ' done' : '') + '" data-id="' + t.id + '">' +
-          '<div class="kicker"><span>' + sec + ' · ' + esc(t.cat) + '</span>' +
+          '<div class="kicker"><span>' + (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat) + '</span>' +
           '<button class="del" title="删除此条">撤稿</button></div>' +
           '<div class="title" title="单击划记完成 · 双击修改">' + esc(t.text) + '</div>' +
-          (t.done
-            ? '<span class="done-mark">已 办</span>'
-            : '<div class="meta">投稿于 ' + fmtTime(t.created) + '</div>') +
+          (t.done ? '<span class="done-mark">已 办</span>'
+                  : '<div class="meta">投稿于 ' + fmtTime(t.created) + '</div>') +
           '</div>';
       }).join('');
     }
-
     var total = tasks.length, done = tasks.filter(function (t) { return t.done; }).length;
-    var pct = total ? Math.round(done / total * 100) : 0;
-    $('stats').textContent = '完成率 ' + pct + '% · 共 ' + total + ' 条';
-    $('headline-brief').textContent = total === 0 ? '本日头条：静候投稿'
-      : done === total ? '号外：诸事已毕！'
-      : '本日头条：尚有' + cnNum(total - done) + '事未办';
-    $('standfirst').textContent = total === 0
+    $('tasks-standfirst').textContent = total === 0
       ? '据本报记者报道，编辑部今日暂未收到任何稿件。市民如有待办事宜，欢迎随时来函刊登。'
       : done === total
       ? '据本报记者报道，今日全部 ' + total + ' 项事务均已办结。相关人士表示："今晚可以睡个好觉了。"'
       : '据本报记者报道，今日共有 ' + total + ' 项事务待办，其中 ' + done + ' 项已顺利完成。相关人士表示："剩下的这就去办。"';
   }
 
+  function renderArchive(range, label) {
+    var entries = doneLog.filter(function (l) { return inRange(l.at, range); })
+      .sort(function (a, b) { return b.at - a.at; });
+    var el = $('archive-list');
+    $('archive-title').textContent = label + '办讫纪事';
+    $('archive-standfirst').textContent = entries.length
+      ? '据本报编辑部统计，' + label + '共办结事务 ' + entries.length + ' 件，现将各件纪事存档如下。'
+      : '本期暂无办讫纪事。事情办成一件，本栏便记上一笔。';
+    el.innerHTML = entries.map(function (l) {
+      var d = new Date(l.at);
+      return '<div class="item done">' +
+        '<div class="kicker"><span>' + (SECTIONS[l.cat] || '街谈') + ' · ' + esc(l.cat) + '</span></div>' +
+        '<div class="title">' + esc(l.text) + '</div>' +
+        '<div class="meta">办讫于 ' + cnMD(d) + ' ' + fmtTime(l.at) + '</div>' +
+        '</div>';
+    }).join('') || '';
+    return entries.length;
+  }
+
+  function renderDigest(items, title, standfirst) {
+    $('digest-title').textContent = title;
+    $('digest-standfirst').textContent = standfirst;
+    $('digest-list').innerHTML = items.map(function (it) {
+      return '<div class="digest-item"><div class="d-date">' + it.label + '</div>' +
+        '<div class="d-text">' + esc(it.text) + '</div></div>';
+    }).join('');
+    return items.length;
+  }
+
+  function render() {
+    var isToday = sameDay(viewDate, new Date());
+    var rk = reviewKey();
+    var reviewText = reviews[rk] || '';
+
+    // 各版块显隐
+    var showTasks = edition === 'day' && isToday;
+    show('tasks-section', showTasks);
+    show('archive-section', !showTasks);
+    show('digest-section', false);
+    $('clear-done').style.display = showTasks ? '' : 'none';
+
+    // 社论输入
+    var input = $('review-input');
+    input.value = reviewText;
+    $('review-render').textContent = reviewText;
+    autoGrow(input);
+    $('review-section').classList.toggle('print-hide', !reviewText.trim());
+
+    var doneCount = 0, reviewCount = 0;
+
+    if (edition === 'day') {
+      var w = '日一二三四五六'[viewDate.getDay()];
+      $('date-cn').textContent = cnDate(viewDate);
+      var doy = Math.floor((viewDate - new Date(viewDate.getFullYear(), 0, 1)) / 864e5) + 1;
+      $('issue').textContent = '日刊 · 第 ' + doy + ' 期';
+      $('review-title').textContent = '今日社论';
+      input.placeholder = '在此撰写今日复盘：今天做成了什么？卡在了哪里？明天最要紧的一件事是什么……';
+      if (showTasks) {
+        renderTasks();
+        doneCount = tasks.filter(function (t) { return t.done; }).length;
+        var total = tasks.length;
+        $('headline-brief').textContent = total === 0 ? '本日头条：静候投稿'
+          : doneCount === total ? '号外：诸事已毕！'
+          : '本日头条：尚有' + cnNum(total - doneCount) + '事未办';
+      } else {
+        var d0 = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate());
+        doneCount = renderArchive({ start: d0, end: d0 }, '当日');
+        $('headline-brief').textContent = '往期存档 · 星期' + w;
+      }
+    } else if (edition === 'week') {
+      var iw = isoWeek(viewDate), r = weekRange(viewDate);
+      $('date-cn').textContent = cnYear(r.start) + '第' + cnNum(iw.w) + '周 · ' + cnMD(r.start) + '至' + cnMD(r.end);
+      $('issue').textContent = '周刊 · 第 ' + iw.w + ' 期';
+      $('review-title').textContent = '一周综述';
+      input.placeholder = '在此撰写周复盘：本周主线是什么？哪件事最值得记一笔？下周想改进什么……';
+      doneCount = renderArchive(r, '本周');
+
+      // 每日社论存档
+      var items = [];
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(r.start); d.setDate(r.start.getDate() + i);
+        var t = reviews['d:' + dayKey(d)];
+        if (t && t.trim()) items.push({ label: cnMD(d) + ' · 星期' + '日一二三四五六'[d.getDay()], text: t });
+      }
+      reviewCount = items.length;
+      if (items.length) {
+        show('digest-section', true);
+        renderDigest(items, '每日社论存档', '本周共刊发每日社论 ' + items.length + ' 篇，全文存档如下。');
+      }
+      $('headline-brief').textContent = '本周办结' + cnNum(doneCount) + '件 · 社论' + cnNum(reviewCount) + '篇';
+    } else {
+      var mr = monthRange(viewDate);
+      $('date-cn').textContent = cnYear(viewDate) + cnNum(viewDate.getMonth() + 1) + '月 · 月度特刊';
+      $('issue').textContent = '月刊 · 第 ' + (viewDate.getMonth() + 1) + ' 期';
+      $('review-title').textContent = '本月特刊';
+      input.placeholder = '在此撰写月复盘：这个月最大的收获？最大的遗憾？下个月的主题是什么……';
+      doneCount = renderArchive(mr, '本月');
+
+      // 各周综述存档
+      var wItems = [];
+      var cur = weekRange(mr.start).start;
+      while (cur <= mr.end) {
+        var wi = isoWeek(cur);
+        var wt = reviews['w:' + wi.y + '-W' + p2(wi.w)];
+        if (wt && wt.trim()) wItems.push({ label: '第' + cnNum(wi.w) + '周综述', text: wt });
+        cur = new Date(cur); cur.setDate(cur.getDate() + 7);
+      }
+      reviewCount = wItems.length;
+      if (wItems.length) {
+        show('digest-section', true);
+        renderDigest(wItems, '各周综述存档', '本月共刊发周综述 ' + wItems.length + ' 篇，全文存档如下。');
+      }
+      $('headline-brief').textContent = '本月办结' + cnNum(doneCount) + '件 · 综述' + cnNum(reviewCount) + '篇';
+    }
+
+    // 页脚
+    if (showTasks) {
+      var tt = tasks.length, dd = tasks.filter(function (t) { return t.done; }).length;
+      $('stats').textContent = '完成率 ' + (tt ? Math.round(dd / tt * 100) : 0) + '% · 共 ' + tt + ' 条';
+    } else {
+      $('stats').textContent = '本期办结 ' + doneCount + ' 件';
+    }
+  }
+
+  function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.max(128, el.scrollHeight) + 'px';
+  }
+
+  /* ── 事件 ── */
   $('add-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var input = $('new-task');
@@ -269,7 +552,7 @@
     tasks.unshift({ id: Date.now(), text: text, cat: $('new-cat').value, done: false, created: Date.now() });
     input.value = '';
     input.focus();
-    save(); render();
+    save(TASK_KEY, tasks); render();
     toast('已刊登');
   });
 
@@ -279,10 +562,10 @@
     filter = s.dataset.f;
     this.querySelectorAll('span').forEach(function (el) { el.classList.remove('active'); });
     s.classList.add('active');
-    render();
+    renderTasks();
   });
 
-  list.addEventListener('click', function (e) {
+  $('list').addEventListener('click', function (e) {
     var item = e.target.closest('.item');
     if (!item) return;
     var id = +item.dataset.id;
@@ -292,23 +575,29 @@
     if (e.target.classList.contains('del')) {
       if (!confirm('确定撤下这条稿件？\n「' + task.text + '」')) return;
       tasks = tasks.filter(function (t) { return t.id !== id; });
-      save(); render();
+      save(TASK_KEY, tasks); render();
       toast('已撤稿');
       return;
     }
     if (e.target.classList.contains('title')) {
       if (e.target.isContentEditable) return;
       task.done = !task.done;
-      save(); render();
+      if (task.done) {
+        doneLog.push({ id: task.id, text: task.text, cat: task.cat, at: Date.now() });
+      } else {
+        for (var i = doneLog.length - 1; i >= 0; i--) {
+          if (doneLog[i].id === task.id) { doneLog.splice(i, 1); break; }
+        }
+      }
+      save(TASK_KEY, tasks); save(LOG_KEY, doneLog); render();
       toast(task.done ? '办讫，盖章存档' : '重新列为待办');
     }
   });
 
-  list.addEventListener('dblclick', function (e) {
+  $('list').addEventListener('dblclick', function (e) {
     var title = e.target.closest('.title');
     if (!title || title.isContentEditable) return;
-    var item = title.closest('.item');
-    var id = +item.dataset.id;
+    var id = +title.closest('.item').dataset.id;
     var task = tasks.find(function (t) { return t.id === id; });
     if (!task) return;
 
@@ -319,7 +608,12 @@
     function finish(commit) {
       title.contentEditable = 'false';
       var text = title.textContent.trim();
-      if (commit && text) { task.text = text; save(); toast('已改稿'); }
+      if (commit && text) {
+        task.text = text;
+        doneLog.forEach(function (l) { if (l.id === task.id) l.text = text; });
+        save(TASK_KEY, tasks); save(LOG_KEY, doneLog);
+        toast('已改稿');
+      }
       render();
     }
     title.addEventListener('blur', function () { finish(true); }, { once: true });
@@ -332,15 +626,64 @@
   $('clear-done').addEventListener('click', function () {
     var n = tasks.filter(function (t) { return t.done; }).length;
     if (!n) { toast('没有可清理的已办稿件'); return; }
-    if (!confirm('将 ' + n + ' 条已办稿件送入档案室（删除）？')) return;
+    if (!confirm('将 ' + n + ' 条已办稿件从版面撤下？\n（办讫纪事已存档，周刊 / 月刊仍可查到）')) return;
     tasks = tasks.filter(function (t) { return !t.done; });
-    save(); render();
+    save(TASK_KEY, tasks); render();
     toast('已清理 ' + n + ' 条');
   });
 
-  var now = new Date();
-  $('date-cn').textContent = cnDate(now);
-  $('issue').textContent = '第 ' + (Math.floor((now - new Date(now.getFullYear(), 0, 1)) / 864e5) + 1) + ' 期';
+  // 社论自动保存
+  $('review-input').addEventListener('input', function () {
+    var rk = reviewKey();
+    if (this.value.trim()) reviews[rk] = this.value;
+    else delete reviews[rk];
+    save(REVIEW_KEY, reviews);
+    $('review-render').textContent = this.value;
+    $('review-section').classList.toggle('print-hide', !this.value.trim());
+    autoGrow(this);
+  });
+
+  // 刊别切换与翻期
+  $('tabs').addEventListener('click', function (e) {
+    var s = e.target.closest('span[data-e]');
+    if (!s) return;
+    edition = s.dataset.e;
+    this.querySelectorAll('span').forEach(function (el) { el.classList.remove('active'); });
+    s.classList.add('active');
+    render();
+  });
+  function shift(n) {
+    if (edition === 'day') viewDate.setDate(viewDate.getDate() + n);
+    else if (edition === 'week') viewDate.setDate(viewDate.getDate() + n * 7);
+    else viewDate.setMonth(viewDate.getMonth() + n);
+    render();
+  }
+  $('nav-prev').addEventListener('click', function () { shift(-1); });
+  $('nav-next').addEventListener('click', function () { shift(1); });
+  $('nav-now').addEventListener('click', function () { viewDate = new Date(); render(); });
+
+  // 印刷发行：整版导出 PNG
+  $('print-btn').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    document.body.classList.add('printing');
+    html2canvas($('paper'), { scale: 2, backgroundColor: '#f5f1e6' }).then(function (canvas) {
+      var name;
+      if (edition === 'day') name = '今日事报_日刊_' + dayKey(viewDate);
+      else if (edition === 'week') { var w = isoWeek(viewDate); name = '今日事报_周刊_' + w.y + '年第' + w.w + '周'; }
+      else name = '今日事报_月刊_' + viewDate.getFullYear() + '-' + p2(viewDate.getMonth() + 1);
+      var a = document.createElement('a');
+      a.download = name + '.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      toast('本期已付印，请查收下载');
+    }).catch(function () {
+      toast('印刷失败，请重试');
+    }).finally(function () {
+      document.body.classList.remove('printing');
+      btn.disabled = false;
+    });
+  });
 
   render();
 })();
