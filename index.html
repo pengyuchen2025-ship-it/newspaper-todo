@@ -313,6 +313,10 @@
       <p class="standfirst" id="tasks-standfirst"></p>
       <form class="input-row" id="add-form">
         <input type="text" id="new-task" placeholder="向本报投稿新任务……" maxlength="60" autocomplete="off">
+        <select id="new-mode" title="单篇只登一次；连载每天自动刊出（如晨跑）">
+          <option value="once">单篇</option>
+          <option value="serial">连载</option>
+        </select>
         <select id="new-prio" title="版位：头条最要紧，简讯是小事">
           <option value="normal">要闻</option>
           <option value="top">头条</option>
@@ -401,9 +405,11 @@
   function stamp() { return Date.now() + TZ_OFFSET; }
   var SECTIONS = { '工作': '头版', '会议': '要闻', '健康': '体育版', '日常': '通讯', '阅读': '副刊', '其他': '街谈' };
 
+  var SERIAL_KEY = 'newspaper-serials-v1';
   var tasks = load(TASK_KEY, []);
   var reviews = load(REVIEW_KEY, {});
   var doneLog = load(LOG_KEY, []);
+  var serials = load(SERIAL_KEY, []);
   var filter = 'all';
   var edition = 'day';            // day | week | month
   var viewDate = unow();          // 当前浏览的期号所在日期
@@ -499,6 +505,31 @@
   /* ── 渲染 ── */
   function show(id, on) { $(id).style.display = on ? '' : 'none'; }
 
+  // 连载专栏：每天自动刊出一回；隔天没办的连载稿随昨日报纸过期撤下（习惯过期不补）
+  function serialNo(s) {
+    var n = unow(), st = new Date(s.start);
+    var a = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    var b = new Date(st.getFullYear(), st.getMonth(), st.getDate());
+    return Math.round((a - b) / 864e5) + 1;
+  }
+  function spawnSerials() {
+    if (!serials.length && !tasks.some(function (t) { return t.serialId; })) return;
+    var today = dayKey(unow());
+    var changed = false;
+    tasks = tasks.filter(function (t) {
+      if (t.serialId && dayKey(new Date(t.created)) !== today) { changed = true; return false; }
+      return true;
+    });
+    serials.forEach(function (s) {
+      if (tasks.some(function (t) { return t.serialId === s.id; })) return;
+      var nid = stamp();
+      while (tasks.some(function (t) { return t.id === nid; })) nid++;
+      tasks.push({ id: nid, text: s.text, cat: s.cat, prio: s.prio, done: false, created: stamp(), serialId: s.id });
+      changed = true;
+    });
+    if (changed) save(TASK_KEY, tasks);
+  }
+
   var PRIO_ORDER = { top: 0, normal: 1, brief: 2 };
   var PRIO_NAME = { top: '头条', brief: '简讯' };
   function prioOf(t) { return PRIO_ORDER[t.prio] !== undefined ? t.prio : 'normal'; }
@@ -534,15 +565,18 @@
       list.innerHTML = shown.map(function (t) {
         var od = overdueDays(t);
         var prio = prioOf(t);
+        var ser = t.serialId && serials.find(function (x) { return x.id === t.serialId; });
         var cls = 'item' + (t.done ? ' done' : '') + (od > 0 ? ' overdue' : '') +
           (prio !== 'normal' ? ' prio-' + prio : '');
         var kicker = od > 0 ? '催办 · ' + esc(t.cat)
+          : ser ? '连载 · ' + esc(t.cat)
           : PRIO_NAME[prio] ? PRIO_NAME[prio] + ' · ' + esc(t.cat)
           : (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat);
         var tail;
         if (t.done) tail = '<span class="done-mark">已 办</span>';
         else if (od > 0) tail = '<span class="done-mark urge-mark">催 办</span>' +
           '<div class="meta">已悬' + cnNum(od) + '日 · 编辑部催办</div>';
+        else if (ser) tail = '<div class="meta">连载第' + cnNum(serialNo(ser)) + '回 · 每日专栏</div>';
         else tail = '<div class="meta">投稿于 ' + fmtTime(t.created) + '</div>';
         return '<div class="' + cls + '" data-id="' + t.id + '">' +
           '<div class="kicker"><span>' + kicker + '</span>' +
@@ -591,6 +625,7 @@
   }
 
   function render() {
+    spawnSerials();
     var isToday = sameDay(viewDate, unow());
     var rk = reviewKey();
     var reviewText = reviews[rk] || '';
@@ -698,11 +733,20 @@
     var input = $('new-task');
     var text = input.value.trim();
     if (!text) { input.focus(); return; }
-    tasks.unshift({ id: stamp(), text: text, cat: $('new-cat').value, prio: $('new-prio').value, done: false, created: stamp() });
+    var isSerial = $('new-mode').value === 'serial';
+    var item = { id: stamp(), text: text, cat: $('new-cat').value, prio: $('new-prio').value, done: false, created: stamp() };
+    if (isSerial) {
+      var sid = item.id;
+      serials.push({ id: sid, text: text, cat: item.cat, prio: item.prio, start: item.created });
+      save(SERIAL_KEY, serials);
+      item.serialId = sid;
+      $('new-mode').value = 'once';
+    }
+    tasks.unshift(item);
     input.value = '';
     input.focus();
     save(TASK_KEY, tasks); render();
-    toast('已刊登');
+    toast(isSerial ? '连载专栏已开设，每日自动刊出' : '已刊登');
   });
 
   $('filters').addEventListener('click', function (e) {
@@ -722,10 +766,18 @@
     if (!task) return;
 
     if (e.target.classList.contains('del')) {
-      if (!confirm('确定撤下这条稿件？\n「' + task.text + '」')) return;
+      if (task.serialId) {
+        var ser = serials.find(function (x) { return x.id === task.serialId; });
+        var no = ser ? '（已连载第' + cnNum(serialNo(ser)) + '回）' : '';
+        if (!confirm('「' + task.text + '」是连载专栏' + no + '。\n撤稿即停刊：今后每天不再自动刊出。\n确定停刊？')) return;
+        serials = serials.filter(function (x) { return x.id !== task.serialId; });
+        save(SERIAL_KEY, serials);
+      } else {
+        if (!confirm('确定撤下这条稿件？\n「' + task.text + '」')) return;
+      }
       tasks = tasks.filter(function (t) { return t.id !== id; });
       save(TASK_KEY, tasks); render();
-      toast('已撤稿');
+      toast(task.serialId ? '专栏已停刊' : '已撤稿');
       return;
     }
     if (e.target.classList.contains('title')) {
@@ -760,6 +812,10 @@
       if (commit && text) {
         task.text = text;
         doneLog.forEach(function (l) { if (l.id === task.id) l.text = text; });
+        if (task.serialId) {
+          serials.forEach(function (s) { if (s.id === task.serialId) s.text = text; });
+          save(SERIAL_KEY, serials);
+        }
         save(TASK_KEY, tasks); save(LOG_KEY, doneLog);
         toast('已改稿');
       }
@@ -819,8 +875,8 @@
 
   $('export-btn').addEventListener('click', function () {
     var payload = {
-      app: 'newspaper-todo', version: 1, exportedAt: stamp(),
-      tasks: tasks, reviews: reviews, doneLog: doneLog
+      app: 'newspaper-todo', version: 2, exportedAt: stamp(),
+      tasks: tasks, reviews: reviews, doneLog: doneLog, serials: serials
     };
     var blob = new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' });
     var a = document.createElement('a');
@@ -849,8 +905,8 @@
         '本机：' + tasks.length + ' 条任务 · ' + Object.keys(reviews).length + ' 篇复盘 · ' + doneLog.length + ' 条纪事\n' +
         '档案：' + p.tasks.length + ' 条任务 · ' + Object.keys(p.reviews).length + ' 篇复盘 · ' + p.doneLog.length + ' 条纪事\n\n确定接收？');
       if (!ok) return;
-      tasks = p.tasks; reviews = p.reviews; doneLog = p.doneLog;
-      save(TASK_KEY, tasks); save(REVIEW_KEY, reviews); save(LOG_KEY, doneLog);
+      tasks = p.tasks; reviews = p.reviews; doneLog = p.doneLog; serials = p.serials || [];
+      save(TASK_KEY, tasks); save(REVIEW_KEY, reviews); save(LOG_KEY, doneLog); save(SERIAL_KEY, serials);
       localStorage.setItem('newspaper-tz-v1', '1');
       modal.classList.remove('open');
       render();
