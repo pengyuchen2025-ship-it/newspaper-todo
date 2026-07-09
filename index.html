@@ -184,6 +184,36 @@
   .footer .clear { cursor: pointer; text-decoration: underline; }
   .footer .clear:hover { color: #8a2e1f; }
 
+  /* ── 档案室 ── */
+  #archive-modal {
+    position: fixed; inset: 0; background: rgba(28,26,21,.55);
+    display: none; align-items: center; justify-content: center;
+    z-index: 50; padding: 20px;
+  }
+  #archive-modal.open { display: flex; }
+  .archive-card {
+    background: #f5f1e6; border: 1px solid #d8d0bc; max-width: 380px; width: 100%;
+    padding: 30px 32px; box-shadow: 0 16px 40px rgba(0,0,0,.4); text-align: center;
+  }
+  .archive-card h2 {
+    font-size: 22px; letter-spacing: 8px; font-weight: 900;
+    border-bottom: 3px double #1c1a15; padding-bottom: 12px; margin-bottom: 10px;
+  }
+  .archive-card .note { font-size: 12px; color: #6d6455; line-height: 1.8; margin-bottom: 18px; }
+  .archive-card button {
+    display: block; width: 100%; font-family: inherit; font-size: 14px;
+    letter-spacing: 4px; padding: 12px 0; cursor: pointer; margin-bottom: 10px;
+    border: 1.5px solid #1c1a15;
+  }
+  .archive-card .btn-export { background: #1c1a15; color: #f5f1e6; }
+  .archive-card .btn-export:hover { background: #3a352a; }
+  .archive-card .btn-import { background: #fffdf5; color: #1c1a15; }
+  .archive-card .btn-import:hover { background: #ece5d2; }
+  .archive-card .close {
+    font-size: 12px; color: #6d6455; cursor: pointer; text-decoration: underline;
+  }
+  .archive-card .close:hover { color: #8a2e1f; }
+
   .toast {
     position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(80px);
     background: #1c1a15; color: #f5f1e6; font-size: 13px; letter-spacing: 2px;
@@ -335,6 +365,7 @@
   <div class="footer">
     <span>主编：陈鹏宇</span>
     <span id="stats"></span>
+    <span class="clear" id="archive-room">档案室</span>
     <span class="clear" id="clear-done">清理已办稿件</span>
   </div>
 </div>
@@ -343,6 +374,17 @@
 </div>
 
 <div id="press-overlay"><div id="type-line"></div></div>
+
+<div id="archive-modal">
+  <div class="archive-card">
+    <h2>档 案 室</h2>
+    <p class="note">档案含全部任务、复盘与办讫纪事。<br>「接收档案」会以档案内容<b>覆盖</b>本机现有数据，<br>换电脑时：旧机移交 → 新机接收。</p>
+    <button class="btn-export" id="export-btn">移交档案（导出文件）</button>
+    <button class="btn-import" id="import-btn">接收档案（从文件导入）</button>
+    <span class="close" id="archive-close">关上档案室</span>
+  </div>
+</div>
+<input type="file" id="import-file" accept=".json,application/json" hidden>
 
 <div class="toast" id="toast"></div>
 
@@ -768,6 +810,54 @@
   $('nav-prev').addEventListener('click', function () { shift(-1); });
   $('nav-next').addEventListener('click', function () { shift(1); });
   $('nav-now').addEventListener('click', function () { viewDate = unow(); render(); });
+
+  // 档案室：数据导出 / 导入
+  var modal = $('archive-modal');
+  $('archive-room').addEventListener('click', function () { modal.classList.add('open'); });
+  $('archive-close').addEventListener('click', function () { modal.classList.remove('open'); });
+  modal.addEventListener('click', function (e) { if (e.target === modal) modal.classList.remove('open'); });
+
+  $('export-btn').addEventListener('click', function () {
+    var payload = {
+      app: 'newspaper-todo', version: 1, exportedAt: stamp(),
+      tasks: tasks, reviews: reviews, doneLog: doneLog
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '今日事报_档案_' + dayKey(unow()) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('档案已移交，请查收下载');
+  });
+
+  $('import-btn').addEventListener('click', function () { $('import-file').click(); });
+  $('import-file').addEventListener('change', function () {
+    var file = this.files[0];
+    this.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var p;
+      try { p = JSON.parse(reader.result); } catch (e) { p = null; }
+      if (!p || p.app !== 'newspaper-todo' || !Array.isArray(p.tasks) || !Array.isArray(p.doneLog) ||
+          typeof p.reviews !== 'object' || p.reviews === null) {
+        toast('档案无效：不是本报的档案文件');
+        return;
+      }
+      var ok = confirm('接收档案将覆盖本机现有数据：\n' +
+        '本机：' + tasks.length + ' 条任务 · ' + Object.keys(reviews).length + ' 篇复盘 · ' + doneLog.length + ' 条纪事\n' +
+        '档案：' + p.tasks.length + ' 条任务 · ' + Object.keys(p.reviews).length + ' 篇复盘 · ' + p.doneLog.length + ' 条纪事\n\n确定接收？');
+      if (!ok) return;
+      tasks = p.tasks; reviews = p.reviews; doneLog = p.doneLog;
+      save(TASK_KEY, tasks); save(REVIEW_KEY, reviews); save(LOG_KEY, doneLog);
+      localStorage.setItem('newspaper-tz-v1', '1');
+      modal.classList.remove('open');
+      render();
+      toast('档案接收完毕，已归档入库');
+    };
+    reader.readAsText(file);
+  });
 
   // 印刷发行：整版导出 PNG
   $('print-btn').addEventListener('click', function () {
