@@ -352,6 +352,11 @@
   var TASK_KEY = 'newspaper-todo-v1';
   var REVIEW_KEY = 'newspaper-reviews-v1';
   var LOG_KEY = 'newspaper-donelog-v1';
+
+  // 读者所在地比本机系统时间快 12 小时，全报按读者当地时间刊行
+  var TZ_OFFSET = 12 * 3600e3;
+  function unow() { return new Date(Date.now() + TZ_OFFSET); }
+  function stamp() { return Date.now() + TZ_OFFSET; }
   var SECTIONS = { '工作': '头版', '会议': '要闻', '健康': '体育版', '日常': '通讯', '阅读': '副刊', '其他': '街谈' };
 
   var tasks = load(TASK_KEY, []);
@@ -359,7 +364,15 @@
   var doneLog = load(LOG_KEY, []);
   var filter = 'all';
   var edition = 'day';            // day | week | month
-  var viewDate = new Date();      // 当前浏览的期号所在日期
+  var viewDate = unow();          // 当前浏览的期号所在日期
+
+  // 时区迁移：把切换前存下的旧时间戳一次性校正到读者当地时间
+  if (!localStorage.getItem('newspaper-tz-v1')) {
+    tasks.forEach(function (t) { t.created += TZ_OFFSET; });
+    doneLog.forEach(function (l) { l.at += TZ_OFFSET; });
+    localStorage.setItem('newspaper-tz-v1', '1');
+    save(TASK_KEY, tasks);
+  }
 
   // 旧数据迁移：已完成但没有纪事记录的任务，补录一条
   tasks.forEach(function (t) {
@@ -445,7 +458,7 @@
   function prioOf(t) { return PRIO_ORDER[t.prio] !== undefined ? t.prio : 'normal'; }
   function overdueDays(t) {
     if (t.done) return 0;
-    var now = new Date(), c = new Date(t.created);
+    var now = unow(), c = new Date(t.created);
     var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var created0 = new Date(c.getFullYear(), c.getMonth(), c.getDate());
     return Math.round((today0 - created0) / 864e5);
@@ -532,7 +545,7 @@
   }
 
   function render() {
-    var isToday = sameDay(viewDate, new Date());
+    var isToday = sameDay(viewDate, unow());
     var rk = reviewKey();
     var reviewText = reviews[rk] || '';
 
@@ -639,7 +652,7 @@
     var input = $('new-task');
     var text = input.value.trim();
     if (!text) { input.focus(); return; }
-    tasks.unshift({ id: Date.now(), text: text, cat: $('new-cat').value, prio: $('new-prio').value, done: false, created: Date.now() });
+    tasks.unshift({ id: stamp(), text: text, cat: $('new-cat').value, prio: $('new-prio').value, done: false, created: stamp() });
     input.value = '';
     input.focus();
     save(TASK_KEY, tasks); render();
@@ -673,7 +686,7 @@
       if (e.target.isContentEditable) return;
       task.done = !task.done;
       if (task.done) {
-        doneLog.push({ id: task.id, text: task.text, cat: task.cat, at: Date.now() });
+        doneLog.push({ id: task.id, text: task.text, cat: task.cat, at: stamp() });
       } else {
         for (var i = doneLog.length - 1; i >= 0; i--) {
           if (doneLog[i].id === task.id) { doneLog.splice(i, 1); break; }
@@ -750,7 +763,7 @@
   }
   $('nav-prev').addEventListener('click', function () { shift(-1); });
   $('nav-next').addEventListener('click', function () { shift(1); });
-  $('nav-now').addEventListener('click', function () { viewDate = new Date(); render(); });
+  $('nav-now').addEventListener('click', function () { viewDate = unow(); render(); });
 
   // 印刷发行：整版导出 PNG
   $('print-btn').addEventListener('click', function () {
@@ -780,7 +793,7 @@
   /* ── 送报开场：报头逐字敲出 → 整版逐行打印 ── */
   (function intro() {
     var LAST = 'newspaper-lastprint';
-    var today = dayKey(new Date());
+    var today = dayKey(unow());
     var byUrl = new URLSearchParams(location.search).get('press') === '1';
     if (!byUrl && localStorage.getItem(LAST) === today) return;
     localStorage.setItem(LAST, today);
