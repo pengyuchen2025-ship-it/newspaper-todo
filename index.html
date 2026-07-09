@@ -427,6 +427,10 @@
     var end = new Date(r.end); end.setHours(23, 59, 59, 999);
     return ts >= r.start.getTime() && ts <= end.getTime();
   }
+  var EPOCH = new Date(2026, 6, 9);   // 创刊日（读者当地 2026-07-09）
+  function issueLabel(kind, n) {
+    return kind + ' · ' + (n === 1 ? '创刊号' : n < 1 ? '试刊号' : '第 ' + n + ' 期');
+  }
   function reviewKey() {
     if (edition === 'day') return 'd:' + dayKey(viewDate);
     if (edition === 'week') { var w = isoWeek(viewDate); return 'w:' + w.y + '-W' + p2(w.w); }
@@ -568,8 +572,8 @@
     if (edition === 'day') {
       var w = '日一二三四五六'[viewDate.getDay()];
       $('date-cn').textContent = cnDate(viewDate);
-      var doy = Math.floor((viewDate - new Date(viewDate.getFullYear(), 0, 1)) / 864e5) + 1;
-      $('issue').textContent = '日刊 · 第 ' + doy + ' 期';
+      var d0 = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate());
+      $('issue').textContent = issueLabel('日刊', Math.round((d0 - EPOCH) / 864e5) + 1);
       $('review-title').textContent = '今日社论';
       input.placeholder = '在此撰写今日复盘：今天做成了什么？卡在了哪里？明天最要紧的一件事是什么……';
       if (showTasks) {
@@ -589,7 +593,7 @@
     } else if (edition === 'week') {
       var iw = isoWeek(viewDate), r = weekRange(viewDate);
       $('date-cn').textContent = cnYear(r.start) + '第' + cnNum(iw.w) + '周 · ' + cnMD(r.start) + '至' + cnMD(r.end);
-      $('issue').textContent = '周刊 · 第 ' + iw.w + ' 期';
+      $('issue').textContent = issueLabel('周刊', Math.round((r.start - weekRange(EPOCH).start) / (7 * 864e5)) + 1);
       $('review-title').textContent = '一周综述';
       input.placeholder = '在此撰写周复盘：本周主线是什么？哪件事最值得记一笔？下周想改进什么……';
       doneCount = renderArchive(r, '本周');
@@ -610,7 +614,7 @@
     } else {
       var mr = monthRange(viewDate);
       $('date-cn').textContent = cnYear(viewDate) + cnNum(viewDate.getMonth() + 1) + '月 · 月度特刊';
-      $('issue').textContent = '月刊 · 第 ' + (viewDate.getMonth() + 1) + ' 期';
+      $('issue').textContent = issueLabel('月刊', (viewDate.getFullYear() - EPOCH.getFullYear()) * 12 + viewDate.getMonth() - EPOCH.getMonth() + 1);
       $('review-title').textContent = '本月特刊';
       input.placeholder = '在此撰写月复盘：这个月最大的收获？最大的遗憾？下个月的主题是什么……';
       doneCount = renderArchive(mr, '本月');
