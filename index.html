@@ -735,6 +735,13 @@
     if (!text) { input.focus(); return; }
     var isSerial = $('new-mode').value === 'serial';
     var item = { id: stamp(), text: text, cat: $('new-cat').value, prio: $('new-prio').value, done: false, created: stamp() };
+    // 头条唯一制：头版头条只有一条，新头条上版，旧头条（未办的）降为要闻
+    var demoted = false;
+    if (item.prio === 'top') {
+      tasks.forEach(function (t) {
+        if (!t.done && prioOf(t) === 'top') { t.prio = 'normal'; demoted = true; }
+      });
+    }
     if (isSerial) {
       var sid = item.id;
       serials.push({ id: sid, text: text, cat: item.cat, prio: item.prio, start: item.created });
@@ -746,7 +753,7 @@
     input.value = '';
     input.focus();
     save(TASK_KEY, tasks); render();
-    toast(isSerial ? '连载专栏已开设，每日自动刊出' : '已刊登');
+    toast((isSerial ? '连载专栏已开设，每日自动刊出' : '已刊登') + (demoted ? '；旧头条降为要闻' : ''));
   });
 
   $('filters').addEventListener('click', function (e) {
