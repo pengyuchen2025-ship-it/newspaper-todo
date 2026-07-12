@@ -316,6 +316,7 @@
         <select id="new-mode" title="单篇只登一次；连载每天自动刊出（如晨跑）">
           <option value="once">单篇</option>
           <option value="serial">连载</option>
+          <option value="project">专题</option>
         </select>
         <select id="new-prio" title="版位：头条最要紧，简讯是小事">
           <option value="normal">要闻</option>
@@ -533,12 +534,17 @@
   var PRIO_ORDER = { top: 0, normal: 1, brief: 2 };
   var PRIO_NAME = { top: '头条', brief: '简讯' };
   function prioOf(t) { return PRIO_ORDER[t.prio] !== undefined ? t.prio : 'normal'; }
-  function overdueDays(t) {
-    if (t.done) return 0;
+  function daysSince(t) {
     var now = unow(), c = new Date(t.created);
     var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     var created0 = new Date(c.getFullYear(), c.getMonth(), c.getDate());
     return Math.round((today0 - created0) / 864e5);
+  }
+  function overdueDays(t) {
+    if (t.done) return 0;
+    // 专题在限期内不催办；超过限期按超出天数催办
+    if (t.project) return t.limit ? Math.max(0, daysSince(t) + 1 - t.limit) : 0;
+    return daysSince(t);
   }
 
   function renderTasks() {
@@ -569,13 +575,16 @@
         var cls = 'item' + (t.done ? ' done' : '') + (od > 0 ? ' overdue' : '') +
           (prio !== 'normal' ? ' prio-' + prio : '');
         var kicker = od > 0 ? '催办 · ' + esc(t.cat)
+          : t.project ? '专题 · ' + esc(t.cat)
           : ser ? '连载 · ' + esc(t.cat)
           : PRIO_NAME[prio] ? PRIO_NAME[prio] + ' · ' + esc(t.cat)
           : (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat);
         var tail;
-        if (t.done) tail = '<span class="done-mark">已 办</span>';
+        if (t.done) tail = '<span class="done-mark">' + (t.project ? '结 案' : '已 办') + '</span>';
         else if (od > 0) tail = '<span class="done-mark urge-mark">催 办</span>' +
-          '<div class="meta">已悬' + cnNum(od) + '日 · 编辑部催办</div>';
+          '<div class="meta">' + (t.project ? '已超期' : '已悬') + cnNum(od) + '日 · 编辑部催办</div>';
+        else if (t.project) tail = '<div class="meta">专题第' + cnNum(daysSince(t) + 1) + '天' +
+          (t.limit ? ' · 限' + cnNum(t.limit) + '天' : '') + '</div>';
         else if (ser) tail = '<div class="meta">连载第' + cnNum(serialNo(ser)) + '回 · 每日专栏</div>';
         else tail = '<div class="meta">投稿于 ' + fmtTime(t.created) + '</div>';
         return '<div class="' + cls + '" data-id="' + t.id + '">' +
@@ -733,8 +742,16 @@
     var input = $('new-task');
     var text = input.value.trim();
     if (!text) { input.focus(); return; }
-    var isSerial = $('new-mode').value === 'serial';
+    var mode = $('new-mode').value;
+    var isSerial = mode === 'serial';
     var item = { id: stamp(), text: text, cat: $('new-cat').value, prio: $('new-prio').value, done: false, created: stamp() };
+    if (mode === 'project') {
+      item.project = true;
+      var lim = prompt('专题「' + text + '」预计几天完成？\n填数字设截稿期（超期会被催办），留空则不设。', '');
+      lim = parseInt(lim, 10);
+      if (lim > 0) item.limit = lim;
+      $('new-mode').value = 'once';
+    }
     // 头条唯一制：头版头条只有一条，新头条上版，旧头条（未办的）降为要闻
     var demoted = false;
     if (item.prio === 'top') {
@@ -753,7 +770,9 @@
     input.value = '';
     input.focus();
     save(TASK_KEY, tasks); render();
-    toast((isSerial ? '连载专栏已开设，每日自动刊出' : '已刊登') + (demoted ? '；旧头条降为要闻' : ''));
+    toast((isSerial ? '连载专栏已开设，每日自动刊出'
+      : item.project ? '专题已立项，每日跟踪报道'
+      : '已刊登') + (demoted ? '；旧头条降为要闻' : ''));
   });
 
   $('filters').addEventListener('click', function (e) {
@@ -789,6 +808,8 @@
     }
     if (e.target.classList.contains('title')) {
       if (e.target.isContentEditable) return;
+      if (task.project && !task.done &&
+          !confirm('专题「' + task.text + '」宣告结案？\n（追踪了' + cnNum(daysSince(task) + 1) + '天）')) return;
       task.done = !task.done;
       if (task.done) {
         doneLog.push({ id: task.id, text: task.text, cat: task.cat, at: stamp() });
@@ -798,7 +819,8 @@
         }
       }
       save(TASK_KEY, tasks); save(LOG_KEY, doneLog); render();
-      toast(task.done ? '办讫，盖章存档' : '重新列为待办');
+      toast(task.done ? (task.project ? '专题结案，可喜可贺' : '办讫，盖章存档')
+                      : (task.project ? '专题重新立案' : '重新列为待办'));
     }
   });
 
