@@ -574,9 +574,10 @@
         var ser = t.serialId && serials.find(function (x) { return x.id === t.serialId; });
         var cls = 'item' + (t.done ? ' done' : '') + (od > 0 ? ' overdue' : '') +
           (prio !== 'normal' ? ' prio-' + prio : '');
+        var topMark = prio === 'top' ? '头条' : '';
         var kicker = od > 0 ? '催办 · ' + esc(t.cat)
-          : t.project ? '专题 · ' + esc(t.cat)
-          : ser ? '连载 · ' + esc(t.cat)
+          : t.project ? topMark + '专题 · ' + esc(t.cat)
+          : ser ? topMark + '连载 · ' + esc(t.cat)
           : PRIO_NAME[prio] ? PRIO_NAME[prio] + ' · ' + esc(t.cat)
           : (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat);
         var tail;
