@@ -476,9 +476,9 @@
     var end = new Date(r.end); end.setHours(23, 59, 59, 999);
     return ts >= r.start.getTime() && ts <= end.getTime();
   }
-  var EPOCH = new Date(2026, 6, 9);   // 创刊日（读者当地 2026-07-09）
+  var EPOCH = new Date(2026, 8, 10);   // 创刊日（读者当地 2026-09-10）
   function issueLabel(kind, n) {
-    return kind + ' · ' + (n === 1 ? '创刊号' : n < 1 ? '试刊号' : '第 ' + n + ' 期');
+    return kind + ' · ' + (n < 1 ? '试刊号' : '第 ' + n + ' 期');
   }
   function reviewKey() {
     if (edition === 'day') return 'd:' + dayKey(viewDate);
