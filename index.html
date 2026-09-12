@@ -547,9 +547,9 @@
     return daysSince(t);
   }
 
-  function renderTasks() {
+  function tasksForToday() {    var today = unow();    return tasks.filter(function (t) {      return sameDay(new Date(t.created), today) || (t.project && !t.done);    });  }  function renderTasks() {
     var list = $('list');
-    var shown = tasks.filter(function (t) {
+    var issueTasks = tasksForToday();    var shown = issueTasks.filter(function (t) {
       return filter === 'all' || (filter === 'done' ? t.done : !t.done);
     });
     shown.sort(function (a, b) {
@@ -595,8 +595,8 @@
           tail + '</div>';
       }).join('');
     }
-    var total = tasks.length, done = tasks.filter(function (t) { return t.done; }).length;
-    var urgent = tasks.filter(function (t) { return overdueDays(t) > 0; }).length;
+    var total = issueTasks.length, done = issueTasks.filter(function (t) { return t.done; }).length;
+    var urgent = issueTasks.filter(function (t) { return overdueDays(t) > 0; }).length;
     $('tasks-standfirst').textContent = (total === 0
       ? '据本报记者报道，编辑部今日暂未收到任何稿件。市民如有待办事宜，欢迎随时来函刊登。'
       : done === total
@@ -605,7 +605,7 @@
       + (urgent ? '另有 ' + urgent + ' 件隔夜悬案，编辑部已发出催办函。' : '');
   }
 
-  function renderArchive(range, label) {
+  function renderDayArchive(d) {    var issueTasks = tasks.filter(function (t) { return sameDay(new Date(t.created), d); });    var known = {};    issueTasks.forEach(function (t) { known[t.id] = true; });    var entries = issueTasks.map(function (t) {      var log = doneLog.find(function (l) { return l.id === t.id; });      return { id: t.id, text: t.text, cat: t.cat, created: t.created, done: t.done, doneAt: log && log.at };    });    doneLog.forEach(function (l) {      if (!known[l.id] && sameDay(new Date(l.at), d)) {        entries.push({ id: l.id, text: l.text, cat: l.cat, created: l.at, done: true, doneAt: l.at });      }    });    entries.sort(function (a, b) { return b.created - a.created; });    var done = entries.filter(function (t) { return t.done; }).length;    $('archive-title').textContent = '当日刊载';    $('archive-standfirst').textContent = entries.length      ? '本期共刊登事务 ' + entries.length + ' 件，其中已办 ' + done + ' 件、未办 ' + (entries.length - done) + ' 件。'      : '本期未刊登待办事项。';    $('archive-list').innerHTML = entries.map(function (t) {      return '<div class="item' + (t.done ? ' done' : '') + '">' +        '<div class="kicker"><span>' + (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat) + '</span></div>' +        '<div class="title">' + esc(t.text) + '</div>' +        (t.done          ? '<span class="done-mark">已 办</span><div class="meta">办讫于 ' + cnMD(new Date(t.doneAt || t.created)) + ' ' + fmtTime(t.doneAt || t.created) + '</div>'          : '<div class="meta">当期未办</div>') +        '</div>';    }).join('');    return done;  }  function renderArchive(range, label) {
     var entries = doneLog.filter(function (l) { return inRange(l.at, range); })
       .sort(function (a, b) { return b.at - a.at; });
     var el = $('archive-list');
@@ -665,16 +665,16 @@
       input.placeholder = '在此撰写今日复盘：今天做成了什么？卡在了哪里？明天最要紧的一件事是什么……';
       if (showTasks) {
         renderTasks();
-        doneCount = tasks.filter(function (t) { return t.done; }).length;
-        var total = tasks.length;
-        var urgent = tasks.filter(function (t) { return overdueDays(t) > 0; }).length;
+        var todayTasks = tasksForToday();        doneCount = todayTasks.filter(function (t) { return t.done; }).length;
+        var total = todayTasks.length;
+        var urgent = todayTasks.filter(function (t) { return overdueDays(t) > 0; }).length;
         $('headline-brief').textContent = urgent ? '本日头条：' + cnNum(urgent) + '件催办中'
           : total === 0 ? '本日头条：静候投稿'
           : doneCount === total ? '号外：诸事已毕！'
           : '本日头条：尚有' + cnNum(total - doneCount) + '事未办';
       } else {
         var d0 = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate());
-        doneCount = renderArchive({ start: d0, end: d0 }, '当日');
+        doneCount = renderDayArchive(d0);
         $('headline-brief').textContent = '往期存档 · 星期' + w;
       }
     } else if (edition === 'week') {
@@ -725,7 +725,7 @@
 
     // 页脚
     if (showTasks) {
-      var tt = tasks.length, dd = tasks.filter(function (t) { return t.done; }).length;
+      var currentTasks = tasksForToday();      var tt = currentTasks.length, dd = currentTasks.filter(function (t) { return t.done; }).length;
       $('stats').textContent = '完成率 ' + (tt ? Math.round(dd / tt * 100) : 0) + '% · 共 ' + tt + ' 条';
     } else {
       $('stats').textContent = '本期办结 ' + doneCount + ' 件';
