@@ -400,10 +400,9 @@
   var REVIEW_KEY = 'newspaper-reviews-v1';
   var LOG_KEY = 'newspaper-donelog-v1';
 
-  // 读者所在地比本机系统时间快 12 小时，全报按读者当地时间刊行
-  var TZ_OFFSET = 12 * 3600e3;
-  function unow() { return new Date(Date.now() + TZ_OFFSET); }
-  function stamp() { return Date.now() + TZ_OFFSET; }
+  // 使用浏览器的当地日期；时间戳不再人为增加 12 小时。
+  function unow() { return new Date(); }
+  function stamp() { return Date.now(); }
   var SECTIONS = { '工作': '头版', '会议': '要闻', '健康': '体育版', '日常': '通讯', '阅读': '副刊', '其他': '街谈' };
 
   var SERIAL_KEY = 'newspaper-serials-v1';
@@ -415,13 +414,22 @@
   var edition = 'day';            // day | week | month
   var viewDate = unow();          // 当前浏览的期号所在日期
 
-  // 时区迁移：把切换前存下的旧时间戳一次性校正到读者当地时间
-  if (!localStorage.getItem('newspaper-tz-v1')) {
-    tasks.forEach(function (t) { t.created += TZ_OFFSET; });
-    doneLog.forEach(function (l) { l.at += TZ_OFFSET; });
-    localStorage.setItem('newspaper-tz-v1', '1');
-    save(TASK_KEY, tasks);
+  // 保留迁移前副本，只校正旧版本人为偏移的时间戳；复盘日期不猜测。
+  function migrateClock() {
+    if (localStorage.getItem('newspaper-clock-v2')) return;
+    var legacy = localStorage.getItem('newspaper-tz-v1');
+    localStorage.setItem('newspaper-before-clock-v2', JSON.stringify({
+      tasks: tasks, reviews: reviews, doneLog: doneLog, serials: serials
+    }));
+    if (legacy) {
+      tasks.forEach(function (t) { t.created -= 12 * 3600e3; });
+      doneLog.forEach(function (l) { l.at -= 12 * 3600e3; });
+      serials.forEach(function (s) { s.start -= 12 * 3600e3; });
+    }
+    save(TASK_KEY, tasks); save(LOG_KEY, doneLog); save(SERIAL_KEY, serials);
+    localStorage.setItem('newspaper-clock-v2', '1');
   }
+  migrateClock();
 
   // 旧数据迁移：已完成但没有纪事记录的任务，补录一条
   tasks.forEach(function (t) {
@@ -517,12 +525,10 @@
     if (!serials.length && !tasks.some(function (t) { return t.serialId; })) return;
     var today = dayKey(unow());
     var changed = false;
-    tasks = tasks.filter(function (t) {
-      if (t.serialId && dayKey(new Date(t.created)) !== today) { changed = true; return false; }
-      return true;
-    });
     serials.forEach(function (s) {
-      if (tasks.some(function (t) { return t.serialId === s.id; })) return;
+      if (tasks.some(function (t) {
+        return t.serialId === s.id && (!t.done || dayKey(new Date(t.created)) === today);
+      })) return;
       var nid = stamp();
       while (tasks.some(function (t) { return t.id === nid; })) nid++;
       tasks.push({ id: nid, text: s.text, cat: s.cat, prio: s.prio, done: false, created: stamp(), serialId: s.id });
@@ -547,9 +553,19 @@
     return daysSince(t);
   }
 
-  function tasksForToday() {    var today = unow();    return tasks.filter(function (t) {      return sameDay(new Date(t.created), today) || (t.project && !t.done);    });  }  function renderTasks() {
+  function tasksForToday() {
+    var today = unow();
+    return tasks.filter(function (t) {
+      if (!t.done) return true;
+      var log = doneLog.find(function (l) { return l.id === t.id; });
+      return sameDay(new Date(log ? log.at : t.created), today);
+    });
+  }
+
+  function renderTasks() {
     var list = $('list');
-    var issueTasks = tasksForToday();    var shown = issueTasks.filter(function (t) {
+    var issueTasks = tasksForToday();
+    var shown = issueTasks.filter(function (t) {
       return filter === 'all' || (filter === 'done' ? t.done : !t.done);
     });
     shown.sort(function (a, b) {
@@ -605,7 +621,38 @@
       + (urgent ? '另有 ' + urgent + ' 件隔夜悬案，编辑部已发出催办函。' : '');
   }
 
-  function renderDayArchive(d) {    var issueTasks = tasks.filter(function (t) { return sameDay(new Date(t.created), d); });    var known = {};    issueTasks.forEach(function (t) { known[t.id] = true; });    var entries = issueTasks.map(function (t) {      var log = doneLog.find(function (l) { return l.id === t.id; });      return { id: t.id, text: t.text, cat: t.cat, created: t.created, done: t.done, doneAt: log && log.at };    });    doneLog.forEach(function (l) {      if (!known[l.id] && sameDay(new Date(l.at), d)) {        entries.push({ id: l.id, text: l.text, cat: l.cat, created: l.at, done: true, doneAt: l.at });      }    });    entries.sort(function (a, b) { return b.created - a.created; });    var done = entries.filter(function (t) { return t.done; }).length;    $('archive-title').textContent = '当日刊载';    $('archive-standfirst').textContent = entries.length      ? '本期共刊登事务 ' + entries.length + ' 件，其中已办 ' + done + ' 件、未办 ' + (entries.length - done) + ' 件。'      : '本期未刊登待办事项。';    $('archive-list').innerHTML = entries.map(function (t) {      return '<div class="item' + (t.done ? ' done' : '') + '">' +        '<div class="kicker"><span>' + (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat) + '</span></div>' +        '<div class="title">' + esc(t.text) + '</div>' +        (t.done          ? '<span class="done-mark">已 办</span><div class="meta">办讫于 ' + cnMD(new Date(t.doneAt || t.created)) + ' ' + fmtTime(t.doneAt || t.created) + '</div>'          : '<div class="meta">当期未办</div>') +        '</div>';    }).join('');    return done;  }  function renderArchive(range, label) {
+  function renderDayArchive(d) {
+    var issueTasks = tasks.filter(function (t) { return sameDay(new Date(t.created), d); });
+    var known = {};
+    issueTasks.forEach(function (t) { known[t.id] = true; });
+    var entries = issueTasks.map(function (t) {
+      var log = doneLog.find(function (l) { return l.id === t.id; });
+      return { id: t.id, text: t.text, cat: t.cat, created: t.created, done: t.done, doneAt: log && log.at };
+    });
+    doneLog.forEach(function (l) {
+      if (!known[l.id] && sameDay(new Date(l.at), d)) {
+        entries.push({ id: l.id, text: l.text, cat: l.cat, created: l.at, done: true, doneAt: l.at });
+      }
+    });
+    entries.sort(function (a, b) { return b.created - a.created; });
+    var done = entries.filter(function (t) { return t.done; }).length;
+    $('archive-title').textContent = '当日刊载';
+    $('archive-standfirst').textContent = entries.length
+      ? '本期共刊登事务 ' + entries.length + ' 件，其中已办 ' + done + ' 件、未办 ' + (entries.length - done) + ' 件。'
+      : '本期未刊登待办事项。';
+    $('archive-list').innerHTML = entries.map(function (t) {
+      return '<div class="item' + (t.done ? ' done' : '') + '">' +
+        '<div class="kicker"><span>' + (SECTIONS[t.cat] || '街谈') + ' · ' + esc(t.cat) + '</span></div>' +
+        '<div class="title">' + esc(t.text) + '</div>' +
+        (t.done
+          ? '<span class="done-mark">已 办</span><div class="meta">办讫于 ' + cnMD(new Date(t.doneAt || t.created)) + ' ' + fmtTime(t.doneAt || t.created) + '</div>'
+          : '<div class="meta">当期未办</div>') +
+        '</div>';
+    }).join('');
+    return done;
+  }
+
+  function renderArchive(range, label) {
     var entries = doneLog.filter(function (l) { return inRange(l.at, range); })
       .sort(function (a, b) { return b.at - a.at; });
     var el = $('archive-list');
@@ -665,7 +712,8 @@
       input.placeholder = '在此撰写今日复盘：今天做成了什么？卡在了哪里？明天最要紧的一件事是什么……';
       if (showTasks) {
         renderTasks();
-        var todayTasks = tasksForToday();        doneCount = todayTasks.filter(function (t) { return t.done; }).length;
+        var todayTasks = tasksForToday();
+        doneCount = todayTasks.filter(function (t) { return t.done; }).length;
         var total = todayTasks.length;
         var urgent = todayTasks.filter(function (t) { return overdueDays(t) > 0; }).length;
         $('headline-brief').textContent = urgent ? '本日头条：' + cnNum(urgent) + '件催办中'
@@ -725,7 +773,8 @@
 
     // 页脚
     if (showTasks) {
-      var currentTasks = tasksForToday();      var tt = currentTasks.length, dd = currentTasks.filter(function (t) { return t.done; }).length;
+      var currentTasks = tasksForToday();
+      var tt = currentTasks.length, dd = currentTasks.filter(function (t) { return t.done; }).length;
       $('stats').textContent = '完成率 ' + (tt ? Math.round(dd / tt * 100) : 0) + '% · 共 ' + tt + ' 条';
     } else {
       $('stats').textContent = '本期办结 ' + doneCount + ' 件';
@@ -859,7 +908,9 @@
   });
 
   $('clear-done').addEventListener('click', function () {
-    var currentIds = {};    tasksForToday().forEach(function (t) { currentIds[t.id] = true; });    var n = tasks.filter(function (t) { return currentIds[t.id] && t.done; }).length;
+    var currentIds = {};
+    tasksForToday().forEach(function (t) { currentIds[t.id] = true; });
+    var n = tasks.filter(function (t) { return currentIds[t.id] && t.done; }).length;
     if (!n) { toast('没有可清理的已办稿件'); return; }
     if (!confirm('将 ' + n + ' 条已办稿件从版面撤下？\n（办讫纪事已存档，周刊 / 月刊仍可查到）')) return;
     tasks = tasks.filter(function (t) { return !(currentIds[t.id] && t.done); });
@@ -905,7 +956,7 @@
 
   $('export-btn').addEventListener('click', function () {
     var payload = {
-      app: 'newspaper-todo', version: 2, exportedAt: stamp(),
+      app: 'newspaper-todo', version: 3, clockVersion: 2, exportedAt: stamp(),
       tasks: tasks, reviews: reviews, doneLog: doneLog, serials: serials
     };
     var blob = new Blob([JSON.stringify(payload, null, 1)], { type: 'application/json' });
@@ -937,7 +988,11 @@
       if (!ok) return;
       tasks = p.tasks; reviews = p.reviews; doneLog = p.doneLog; serials = p.serials || [];
       save(TASK_KEY, tasks); save(REVIEW_KEY, reviews); save(LOG_KEY, doneLog); save(SERIAL_KEY, serials);
-      localStorage.setItem('newspaper-tz-v1', '1');
+      if (p.clockVersion !== 2) {
+        localStorage.removeItem('newspaper-clock-v2');
+        localStorage.setItem('newspaper-tz-v1', '1');
+        migrateClock();
+      }
       modal.classList.remove('open');
       render();
       toast('档案接收完毕，已归档入库');
@@ -968,6 +1023,19 @@
     });
   });
 
+  var observedDay = dayKey(unow());
+  function checkDayChange() {
+    var now = unow(), nextDay = dayKey(now);
+    if (nextDay === observedDay) return;
+    if (edition === 'day' && dayKey(viewDate) === observedDay) viewDate = now;
+    observedDay = nextDay;
+    render();
+  }
+  window.addEventListener('focus', checkDayChange);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) checkDayChange();
+  });
+  setInterval(checkDayChange, 30000);
   render();
 
   /* ── 送报开场：报头逐字敲出 → 整版逐行打印 ── */
