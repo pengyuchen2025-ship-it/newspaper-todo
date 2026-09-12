@@ -859,10 +859,10 @@
   });
 
   $('clear-done').addEventListener('click', function () {
-    var n = tasks.filter(function (t) { return t.done; }).length;
+    var currentIds = {};    tasksForToday().forEach(function (t) { currentIds[t.id] = true; });    var n = tasks.filter(function (t) { return currentIds[t.id] && t.done; }).length;
     if (!n) { toast('没有可清理的已办稿件'); return; }
     if (!confirm('将 ' + n + ' 条已办稿件从版面撤下？\n（办讫纪事已存档，周刊 / 月刊仍可查到）')) return;
-    tasks = tasks.filter(function (t) { return !t.done; });
+    tasks = tasks.filter(function (t) { return !(currentIds[t.id] && t.done); });
     save(TASK_KEY, tasks); render();
     toast('已清理 ' + n + ' 条');
   });
